@@ -14,17 +14,17 @@ A League of Legends drafting game. You're shown three champions, keep one, and r
 
 ## How games are decided
 
-`public/engine.js` simulates early, mid and late game. It weighs:
+`engine.js` simulates early, mid and late game. It weighs:
 
 - each champion's early-game, late-game and teamfight ratings
 - whether the champion is on its natural role (off-role is −28%)
 - damage mix (AD/AP), frontline and crowd control
 - **counter matchups**:
-  - hard counters from the `COUNTERS` list in `public/data.js` (e.g. Teemo vs Darius, Malphite vs Yasuo)
+  - hard counters from the `COUNTERS` list in `data.js` (e.g. Teemo vs Darius, Malphite vs Yasuo)
   - class matchups (assassin vs mage, tank vs assassin, fighter vs tank…)
   - ranged vs melee in top and mid
 
-Lane counters swing the laning phase, and counters across the whole team shift the mid and late game. To change balance, edit the champion numbers or the `COUNTERS` list in `public/data.js`.
+Lane counters swing the laning phase, and counters across the whole team shift the mid and late game. To change balance, edit the champion numbers or the `COUNTERS` list in `data.js`.
 
 ## Hosting on your website
 
@@ -43,10 +43,10 @@ The server serves the game and relays duel messages over WebSockets on `/ws`. It
 
 ### Option B: Static hosting only
 
-Use this for GitHub Pages, Netlify, cPanel, or any plain file host. Upload the **contents of `public/`**.
+Use this for GitHub Pages, Netlify, cPanel, or any plain file host. The game is the six files in the repo root: `index.html`, `style.css`, `data.js`, `engine.js`, `net.js` and `app.js`. GitHub Pages can serve this repo as-is (that is how riftdraft.james-mh.com runs). For another host, upload those six files.
 
 With no server available, online duels connect the two browsers directly (peer-to-peer). This uses PeerJS's free public connection broker, and room codes are 5 characters. It works for most players. A few strict networks (some school, office or mobile connections) block direct connections, and then Option A is more reliable.
 
-If the game page is static but you run `server.js` somewhere else, set `window.RIFT_DRAFT_SERVER = "wss://your-server/ws"` in `public/index.html`.
+If the game page is static but you run `server.js` somewhere else, set `window.RIFT_DRAFT_SERVER = "wss://your-server/ws"` in `index.html`.
 
 Champion art loads from Riot's Data Dragon CDN. Rift Draft is a fan project and isn't endorsed by Riot Games.

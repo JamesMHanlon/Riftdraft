@@ -1,4 +1,4 @@
-// Rift Draft server: serves the game from ./public and relays online-duel messages over WebSockets.
+// Rift Draft server: serves the game files and relays online-duel messages over WebSockets.
 // The host player's browser runs the game rules; this server only pairs players in rooms and forwards messages.
 const http = require("http");
 const fs = require("fs");
@@ -6,16 +6,16 @@ const path = require("path");
 const { WebSocketServer } = require("ws");
 
 const PORT = process.env.PORT || 3000;
-const PUBLIC = path.join(__dirname, "public");
-const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
-  ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".ico": "image/x-icon", ".json": "application/json" };
+// The game lives in the repo root (so GitHub Pages can serve it too). Only these files are served.
+const STATIC = new Set(["index.html", "style.css", "data.js", "engine.js", "net.js", "app.js"]);
+const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8" };
 
 const server = http.createServer((req, res) => {
   let p;
   try { p = decodeURIComponent(new URL(req.url, "http://x").pathname); } catch (e) { res.writeHead(400); return res.end(); }
-  if (p === "/") p = "/index.html";
-  const file = path.join(PUBLIC, path.normalize(p));
-  if (!file.startsWith(PUBLIC + path.sep)) { res.writeHead(403); return res.end(); }
+  const name = p === "/" ? "index.html" : p.slice(1);
+  if (!STATIC.has(name)) { res.writeHead(404, { "Content-Type": "text/plain" }); return res.end("Not found"); }
+  const file = path.join(__dirname, name);
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404, { "Content-Type": "text/plain" }); return res.end("Not found"); }
     res.writeHead(200, { "Content-Type": MIME[path.extname(file)] || "application/octet-stream" });
