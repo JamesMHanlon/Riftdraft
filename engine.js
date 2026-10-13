@@ -105,6 +105,35 @@ function teamCounters(A, B) {
   return s;
 }
 
+// ---------- Game plans ----------
+const isStyle = s => typeof s === "string" && STYLE_ORDER.includes(s);
+const styleBeats = (a, b) => STYLES[a].beats.includes(b);
+function champStyleFit(id, s) {
+  if (STYLE_CHAMPS[s].includes(id)) return 1;
+  const c = CH[id];
+  let f = (STYLE_CLASS[s] || {})[c.cls] || 0;
+  if (s === "pick" && c.cc >= 8) f = Math.max(f, 0.5);
+  return f;
+}
+const styleFit = (roles, s) => ROLES.reduce((a, r) => a + champStyleFit(roles[r], s), 0) / 5;
+const styleFits = roles => Object.fromEntries(STYLE_ORDER.map(s => [s, styleFit(roles, s)]));
+function bestStyle(roles) { const f = styleFits(roles); return STYLE_ORDER.slice().sort((a, b) => f[b] - f[a])[0]; }
+// Logit edge for plan a (fit fa) against plan b (fit fb): execution quality, plus a counter bonus
+// that only pays off if your champions can actually run the plan.
+function styleEdge(sa, fa, sb, fb) {
+  let s = (fa - fb) * 1.6;
+  if (styleBeats(sa, sb)) s += 0.3 + 0.5 * fa;
+  if (styleBeats(sb, sa)) s -= 0.3 + 0.5 * fb;
+  return s;
+}
+function botStyle(myRoles, oppRoles, diff) {
+  if (diff === "easy") return rand(STYLE_ORDER);
+  const f = styleFits(myRoles);
+  if (diff !== "hard") return STYLE_ORDER.map(s => [f[s] + Math.random() * 0.15, s]).sort((a, b) => b[0] - a[0])[0][1];
+  const os = bestStyle(oppRoles), of = styleFit(oppRoles, os);
+  return STYLE_ORDER.map(s => [styleEdge(s, f[s], os, of), s]).sort((a, b) => b[0] - a[0])[0][1];
+}
+
 // ---------- Team analysis ----------
 function teamProfile(roles) {
   let early = 0, late = 0, tf = 0, ad = 0, ap = 0, front = 0, cc = 0;
@@ -137,13 +166,23 @@ function analyse(A, B) {
   const lanes = laneMatchups(A, B);
   const laneSum = lanes.reduce((s, l) => s + l.adv, 0);
   const tc = teamCounters(A, B);
-  const logit = (pa.power - pb.power) / 5 + laneSum * 0.12 + tc * 0.25;
+  const sa = isStyle(A.style) ? A.style : bestStyle(A.roles), sb = isStyle(B.style) ? B.style : bestStyle(B.roles);
+  const fa = styleFit(A.roles, sa), fb = styleFit(B.roles, sb);
+  const st = styleEdge(sa, fa, sb, fb);
+  const logit = (pa.power - pb.power) / 5 + laneSum * 0.12 + tc * 0.25 + st;
   const won = lanes.filter(l => l.adv >= 1).length, lost = lanes.filter(l => l.adv <= -1).length;
   if (won >= 3) pa.notes.unshift({ t: `Favoured in ${won} of 5 lane matchups` });
   if (lost >= 3) pb.notes.unshift({ t: `Favoured in ${lost} of 5 lane matchups` });
   if (tc >= 1.2) pa.notes.push({ t: "Counter-picks the enemy comp" });
   if (tc <= -1.2) pb.notes.push({ t: "Counter-picks the enemy comp" });
-  return { pa, pb, lanes, laneSum, tc, pre: sig(logit) };
+  const planNote = (p, s, f, o) => {
+    if (styleBeats(s, o)) p.notes.unshift({ t: `${STYLES[s].name} counters their ${STYLES[o].name}` });
+    p.notes.unshift({ bad: f < 0.4 ? 1 : 0, t: `${STYLES[s].name} game plan (${Math.round(f * 100)}% fit)` });
+  };
+  planNote(pa, sa, fa, sb);
+  planNote(pb, sb, fb, sa);
+  return { pa, pb, lanes, laneSum, tc, st, pre: sig(logit),
+    styles: { a: { id: sa, fit: Math.round(fa * 100) / 100 }, b: { id: sb, fit: Math.round(fb * 100) / 100 } } };
 }
 
 // ---------- Match simulation (the "AI analyst") ----------
@@ -235,6 +274,20 @@ function simulate(A, B) {
     const kills = [...Array(wk)].map(() => s + ":" + killer(s)).concat([...Array(lk)].map(() => O(s) + ":" + killer(O(s))));
     add(1020 + ri(240), s, `Teamfight in ${rand(SPOTS)}! It goes ${wk} for ${lk} in favour of §${s}${wk === 5 ? ". ACE!" : "."}`, kills);
   }
+  {
+    const STYLE_EVENT = {
+      dive: (x, r) => [`Full dive from §${x}! ${C(x, r)} goes straight through the front line for ${C(O(x), "ADC")}.`, [x + ":" + r, x + ":" + killer(x)], 0],
+      ftb: (x, r) => [`${C(x, r)} holds the front line while ${C(x, "ADC")} shreds from behind. Textbook front-to-back fight for §${x}.`, [x + ":ADC", x + ":ADC", x + ":" + killer(x)], 0],
+      poke: (x, r) => [`${C(x, r)} chips the enemy down from range, and the Dragon goes to §${x} without a fight.`, [], 700],
+      split: (x, r) => [`${C(x, r)} split-pushes ${rand(["top", "bot"])} lane and takes an inhibitor while the rest of the map is busy.`, [x + ":" + r], 900],
+      pick: (x, r) => [`${C(x, r)} catches ${C(O(x), rand(["Mid", "ADC", "Jungle"]))} out of position in the fog. Picked off!`, [x + ":" + r], 0],
+    };
+    const actor = side(an.st * 0.8 + noise() * 0.7);
+    const sty = an.styles[actor].id, other = an.styles[O(actor)].id;
+    const r = ROLES.slice().sort((x, y) => champStyleFit(T(actor).roles[y], sty) - champStyleFit(T(actor).roles[x], sty))[0];
+    const [text, kills, obj] = STYLE_EVENT[sty](actor, r);
+    add(1200 + ri(120), actor, text + (styleBeats(sty, other) ? ` Their ${STYLES[other].name} plan has no answer.` : ""), kills, obj);
+  }
   s = side(dM + gold / 2600 + noise());
   {
     const cr = ROLES.slice().sort((x, y) => CH[T(s).roles[y]].cc - CH[T(s).roles[x]].cc)[0];
@@ -266,7 +319,7 @@ function simulate(A, B) {
 
   const mvpRole = ROLES.slice().sort((x, y) => (ck[w + ":" + y] || 0) - (ck[w + ":" + x] || 0))[0];
   return {
-    pre: Math.round(an.pre * 1000) / 1000, winner: w, events: ev, lanes: an.lanes,
+    pre: Math.round(an.pre * 1000) / 1000, winner: w, events: ev, lanes: an.lanes, styles: an.styles,
     mvp: { side: w, role: mvpRole, kills: ck[w + ":" + mvpRole] || 0 },
     notes: { a: pa.notes, b: pb.notes }, grade: { a: gradeOf(pa.power), b: gradeOf(pb.power) },
   };
@@ -335,7 +388,13 @@ function newTournament(entry, size, diff) {
 }
 function playRound(t) {
   const idx = t.rounds.length - 1, R = t.rounds[idx];
-  for (const m of R) { m.res = simulate(t.teams[m.a], t.teams[m.b]); m.w = m.res.winner === "a" ? m.a : m.b; }
+  for (const m of R) {
+    const A = t.teams[m.a], B = t.teams[m.b];
+    if (!A.human) A.style = botStyle(A.roles, B.roles, t.diff);
+    if (!B.human) B.style = botStyle(B.roles, A.roles, t.diff);
+    m.res = simulate(A, B);
+    m.w = m.res.winner === "a" ? m.a : m.b;
+  }
   t.played = idx;
   if (R.length === 1) t.champion = R[0].w;
   else {
@@ -365,7 +424,7 @@ function startGame(S) {
   const n = S.games.length;
   // Game 1: host on blue. Game 2: swap. Game 3: loser of game 2 gets blue side (first pick).
   const blue = n === 0 ? 0 : n === 1 ? 1 : S.games[1].winner === 0 ? 1 : 0;
-  S.games.push({ blue, picks: [[], []], roles: [null, null], shown: [], turn: 0, options: [], rerolls: [1, 1], res: null, winner: null });
+  S.games.push({ blue, picks: [[], []], roles: [null, null], styles: [null, null], shown: [], turn: 0, options: [], rerolls: [1, 1], res: null, winner: null });
   S.phase = "draft";
   S.ready = [false, false];
   rollTurn(S);
@@ -396,12 +455,19 @@ function seriesRoles(S, p, roles) {
   const v = validRoles(G.picks[p], roles);
   if (!v) return false;
   G.roles[p] = v;
-  if (G.roles[0] && G.roles[1]) resolveGame(S);
+  if (G.roles[0] && G.roles[1]) S.phase = "plan";
+  return true;
+}
+function seriesStyle(S, p, style) {
+  const G = curGame(S);
+  if (S.phase !== "plan" || G.styles[p] || !isStyle(style)) return false;
+  G.styles[p] = style;
+  if (G.styles[0] && G.styles[1]) resolveGame(S);
   return true;
 }
 function resolveGame(S) {
   const G = curGame(S), bp = G.blue, rp = 1 - bp;
-  G.res = simulate({ name: S.players[bp].name, roles: G.roles[bp] }, { name: S.players[rp].name, roles: G.roles[rp] });
+  G.res = simulate({ name: S.players[bp].name, roles: G.roles[bp], style: G.styles[bp] }, { name: S.players[rp].name, roles: G.roles[rp], style: G.styles[rp] });
   G.winner = G.res.winner === "a" ? bp : rp;
   S.score[G.winner]++;
   if (S.score[G.winner] >= 2) S.winner = G.winner;
@@ -414,12 +480,15 @@ function seriesReady(S, p) {
   if (S.ready[0] && S.ready[1]) startGame(S);
   return true;
 }
-// What player p is allowed to see: no opponent options, no hidden opponent lanes, no shown-pool.
+// What player p is allowed to see: no opponent options, no hidden opponent lanes or game plan, no shown-pool.
 function seriesView(S, p) {
   const v = JSON.parse(JSON.stringify(S));
   v.games.forEach(g => delete g.shown);
   const G = v.games[v.games.length - 1];
   if (pickerOf(G) !== p) G.options = [];
-  if (!G.res) G.roles = G.roles.map((r, i) => (i === p ? r : r ? "locked" : null));
+  if (!G.res) {
+    G.roles = G.roles.map((r, i) => (i === p ? r : r ? "locked" : null));
+    G.styles = G.styles.map((x, i) => (i === p ? x : x ? "locked" : null));
+  }
   return v;
 }

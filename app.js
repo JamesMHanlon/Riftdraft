@@ -30,7 +30,7 @@ function champImg(id, cls = "") {
 const App = {
   view: "home", mode: null, name: store.get("rd_name") || "", modal: null, busy: null,
   settings: { size: 8, diff: "normal", duelDiff: "normal", timer: 45 },
-  tour: null, myTeam: 0, watch: null, draft: null,
+  tour: null, myTeam: 0, watch: null, draft: null, plan: null,
   net: null, code: "", me: 0, guest: null, lobby: null,
   S: null, series: null, seriesId: null, seenGame: -1, deadline: 0, timerKey: null, timers: {}, picking: false,
   joinCode: (new URLSearchParams(location.search).get("room") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5),
@@ -40,7 +40,7 @@ const myName = () => cleanName(App.name);
 const HERO = rand(["Jinx", "Ahri", "Yasuo", "Darius", "Thresh", "Kaisa", "LeeSin", "Ezreal", "Akali", "Viego"]);
 
 // ---------- Rendering ----------
-const VIEWS = { home: vHome, draft: vDraft, roles: vRoles, bracket: vBracket, match: vMatch, end: vEnd,
+const VIEWS = { home: vHome, draft: vDraft, roles: vRoles, plan: vPlan, bracket: vBracket, match: vMatch, end: vEnd,
   lobby: vLobby, duel: vDuel, dwait: vDwait, series: vSeries };
 let feedTimer = null;
 
@@ -132,8 +132,8 @@ function vHome() {
     </div>
     <div class="steps">
       <div class="step"><b>01</b><h4>Draft</h4><p>Pick one of three random champions, five times. In duels you take turns and no champion is ever offered twice.</p></div>
-      <div class="step"><b>02</b><h4>Set lanes</h4><p>Click role icons to send each champion to a lane. Off-role picks play weaker, and lane counters matter.</p></div>
-      <div class="step"><b>03</b><h4>Battle</h4><p>The AI analyst plays out every game from first blood to the Nexus, weighing comps, power spikes and counters.</p></div>
+      <div class="step"><b>02</b><h4>Lanes &amp; game plan</h4><p>Click role icons to set lanes, then choose how your team plays: dive, front to back, poke, split push or pick.</p></div>
+      <div class="step"><b>03</b><h4>Battle</h4><p>The AI analyst plays out every game from first blood to the Nexus, weighing comps, counters and whose game plan works.</p></div>
     </div>
     <footer>Rift Draft is a fan project and isn't endorsed by Riot Games. League of Legends and all champion art are © Riot Games.</footer>
   </section>${App.modal ? vModal() : ""}`;
@@ -395,8 +395,75 @@ function actionPanel(st) {
   return `<div class="panel action"><div class="panel-h">Up next</div>
     <p class="big-line">${out ? "You've been knocked out." : rn}</p>
     <p class="muted small">${out ? "Keep watching to see who lifts the trophy, or skip straight to the end." : "Click a played match in the bracket to rewatch it."}</p>
-    <div class="btn-row"><button class="btn primary big" onclick="playNext()">Play ${rn}</button>
+    <div class="btn-row"><button class="btn primary big" onclick="${out ? "playNext()" : "openPlan()"}">Play ${rn}</button>
     ${out ? `<button class="btn" onclick="simToEnd()">Skip to the end</button>` : ""}<button class="btn ghost" onclick="leave()">Quit</button></div></div>`;
+}
+// ---------- Game plan (shared) ----------
+function openPlan() {
+  App.plan = { style: App.tour.teams[App.myTeam].style || null };
+  go("plan");
+}
+function planCtx() {
+  if (isDuel()) {
+    const S = App.series, gi = S.games.length - 1, G = S.games[gi], op = 1 - App.me;
+    return { duel: true, mine: G.roles[App.me], enemyName: S.players[op].name, enemyRoles: bestRoles(G.picks[op]),
+      head: seriesBar(S, gi, scoreBefore(S, gi)), kicker: `Game ${gi + 1} · Before you load in` };
+  }
+  const t = App.tour, cur = t.rounds.length - 1, m = t.rounds[cur].find(x => x.a === App.myTeam || x.b === App.myTeam);
+  const opp = t.teams[m.a === App.myTeam ? m.b : m.a];
+  return { duel: false, mine: t.teams[App.myTeam].roles, enemyName: opp.name, enemyRoles: opp.roles, head: "", kicker: `${roundName(t, cur)} · Before you load in` };
+}
+const styleNames = list => list.map(x => STYLES[x].name).join(" and ");
+function vPlan() {
+  const c = planCtx(), sel = App.plan.style, fits = styleFits(c.mine), rec = bestStyle(c.mine);
+  const lean = bestStyle(c.enemyRoles), leanFit = styleFit(c.enemyRoles, lean);
+  const cards = STYLE_ORDER.map((s, i) => {
+    const st = STYLES[s], f = Math.round(fits[s] * 100);
+    const weak = STYLE_ORDER.filter(x => styleBeats(x, s));
+    const badges = (s === rec ? `<span class="pbadge rec">Best fit</span>` : "") +
+      (styleBeats(s, lean) ? `<span class="pbadge good">Counters their lean</span>` : "") +
+      (styleBeats(lean, s) ? `<span class="pbadge bad">Risky vs their lean</span>` : "");
+    return `<button class="plan-card ${sel === s ? "on" : ""}" style="--d:${i * 60}ms" onclick="pickStyle('${s}')">
+      <div class="plan-top"><span class="plan-ic">${styleIcon(s)}</span><div class="grow"><h3>${st.name}</h3><p>${st.desc}</p></div></div>
+      <div class="plan-fit"><span>Team fit</span><div class="mbar"><i style="width:${f}%"></i></div><b>${f}%</b></div>
+      <div class="plan-champs">${ROLES.map(r => {
+        const id = c.mine[r], cf = champStyleFit(id, s);
+        return `<span class="pc ${cf >= 1 ? "great" : cf >= 0.45 ? "ok" : "no"}" title="${esc(CH[id].name)}: ${cf >= 1 ? "perfect fit" : cf >= 0.45 ? "decent fit" : "poor fit"}">${champImg(id)}</span>`;
+      }).join("")}</div>
+      <div class="plan-rps"><span class="good">Beats ${styleNames(st.beats)}</span><span class="bad">Weak to ${styleNames(weak)}</span></div>
+      ${badges ? `<div class="pbadges">${badges}</div>` : ""}
+    </button>`;
+  }).join("");
+  const counters = STYLE_ORDER.filter(x => styleBeats(x, lean));
+  return `<section class="page plan">${c.head}
+    <div class="page-head row-between"><div><div class="kicker">${c.kicker}</div><h2>Choose your game plan</h2>
+      <p class="muted">How will your team play? Your champions decide how well you can pull each plan off, and some plans counter others.</p></div>
+      ${c.duel ? timerHtml() : ""}</div>
+    <div class="plan-grid">
+      <div class="plan-cards">${cards}</div>
+      <div class="side">
+        <div class="panel scout"><div class="panel-h">Scouting report</div>
+          <h3 class="scout-name">${esc(c.enemyName)}</h3>
+          <div class="scout-champs">${ROLES.map(r => champImg(c.enemyRoles[r])).join("")}</div>
+          <p class="scout-lean">${styleIcon(lean)}<span>Their champions lean towards <b>${STYLES[lean].name}</b> (${Math.round(leanFit * 100)}% fit).</span></p>
+          <p class="muted small">${c.duel ? "They pick their plan in secret, just like you. " : ""}${styleNames(counters)} would counter it.</p>
+        </div>
+        <div class="panel legend"><div class="panel-h">Who beats who</div>
+          <ul>${STYLE_ORDER.map(x => `<li>${styleIcon(x)}<b>${STYLES[x].name}</b><span>beats ${styleNames(STYLES[x].beats)}</span></li>`).join("")}</ul>
+        </div>
+      </div>
+    </div>
+    <div class="plan-actions"><button class="btn primary big" ${sel && !App.plan.locked ? "" : "disabled"} onclick="confirmPlan()">
+      ${App.plan.locked ? "Loading in…" : sel ? `Load in with ${STYLES[sel].name}` : "Pick a game plan"}</button></div>
+  </section>`;
+}
+function pickStyle(s) { if (App.plan && !App.plan.locked) { App.plan.style = s; render(); } }
+function confirmPlan() {
+  const s = App.plan.style;
+  if (!isStyle(s) || App.plan.locked) return;
+  if (isDuel()) { App.plan.locked = true; render(); return act({ t: "style", style: s }); }
+  App.tour.teams[App.myTeam].style = s;
+  playNext();
 }
 function playNext() {
   const t = App.tour;
@@ -475,16 +542,20 @@ function lanesPanel(c) {
       <div class="ln-why">${esc(l.why)}</div></div>`;
   }).join("")}</div>`;
 }
+function planChip(res, s) {
+  const x = res.styles && res.styles[s];
+  return x && STYLES[x.id] ? `<span class="sb-style">${styleIcon(x.id)}${STYLES[x.id].name} · ${Math.round(x.fit * 100)}% fit</span>` : "";
+}
 function vMatch() {
   const c = matchCtx(), res = c.res;
   return `<section class="page match">
     ${c.head}
     <div class="match-kicker kicker">${c.kicker}</div>
     <div class="scoreboard">
-      <div class="sb-team a"><span class="sb-side">Blue side${c.mySide === "a" ? " · You" : ""}</span><h3>${esc(c.A.name)}</h3></div>
+      <div class="sb-team a"><span class="sb-side">Blue side${c.mySide === "a" ? " · You" : ""}</span><h3>${esc(c.A.name)}</h3>${planChip(res, "a")}</div>
       <div class="sb-mid"><div class="sb-k"><span id="ka">0</span><i>${ICONS.swords}</i><span id="kb">0</span></div>
         <div class="sb-clock" id="clk">00:00</div><div class="sb-gold" id="gold">Gold even</div></div>
-      <div class="sb-team b"><span class="sb-side">${c.mySide === "b" ? "You · " : ""}Red side</span><h3>${esc(c.B.name)}</h3></div>
+      <div class="sb-team b"><span class="sb-side">${c.mySide === "b" ? "You · " : ""}Red side</span><h3>${esc(c.B.name)}</h3>${planChip(res, "b")}</div>
     </div>
     <div class="wp"><div class="wp-bar"><i id="wpbar" style="width:${res.pre * 100}%"></i></div>
       <div class="wp-l"><span id="wpa">${pct(res.pre)}</span><span class="muted">Win probability</span><span id="wpb">${pct(1 - res.pre)}</span></div></div>
@@ -585,6 +656,7 @@ function duelRoute() {
   const S = App.series, G = S.games[S.games.length - 1];
   if (S.phase === "draft") return "duel";
   if (S.phase === "roles") return G.roles[App.me] ? "dwait" : "roles";
+  if (S.phase === "plan") return G.styles[App.me] ? "dwait" : "plan";
   return S.winner != null ? "series" : "dwait";
 }
 function syncDuelView() {
@@ -597,6 +669,7 @@ function syncDuelView() {
   if (!fresh && App.view === "match") return; // don't interrupt a game that's playing out
   const v = duelRoute();
   if (v === "roles" && (!App.draft || App.draft.gi !== gi || App.draft.sid !== S.id)) App.draft = { picks: [...G.picks[App.me]], assign: {}, gi, sid: S.id };
+  if (v === "plan" && (!App.plan || App.plan.gi !== gi || App.plan.sid !== S.id)) App.plan = { style: null, gi, sid: S.id };
   if (App.view === v) render(); else go(v);
 }
 function nextTurnText(G, me) {
@@ -644,13 +717,16 @@ function vDuel() {
   </section>`;
 }
 function vDwait() {
-  const S = App.series, gi = S.games.length - 1, G = S.games[gi], op = 1 - App.me, lanes = S.phase === "roles";
+  const S = App.series, gi = S.games.length - 1, G = S.games[gi], op = 1 - App.me, opn = esc(S.players[op].name);
+  const lanes = S.phase === "roles", plan = S.phase === "plan", pre = lanes || plan;
   const mine = G.roles[App.me] && G.roles[App.me] !== "locked" ? G.roles[App.me] : null;
-  return `<section class="page dwait">${seriesBar(S, gi, lanes ? scoreBefore(S, gi) : S.score)}
+  const myPlan = plan && isStyle(G.styles[App.me]) ? G.styles[App.me] : null;
+  return `<section class="page dwait">${seriesBar(S, gi, pre ? scoreBefore(S, gi) : S.score)}
     <div class="panel wait-card"><div class="spinner big"></div>
-      <h2>${lanes ? "Lanes locked in" : "Ready for the next game"}</h2>
-      <p class="muted">${lanes ? `Waiting for ${esc(S.players[op].name)} to lock in their lanes…` : `Waiting for ${esc(S.players[op].name)} to ready up for Game ${gi + 2}…`}</p>
-      ${lanes ? timerHtml() : ""}
+      <h2>${lanes ? "Lanes locked in" : plan ? "Game plan locked in" : "Ready for the next game"}</h2>
+      <p class="muted">${lanes ? `Waiting for ${opn} to lock in their lanes…` : plan ? `Waiting for ${opn} to choose their game plan…` : `Waiting for ${opn} to ready up for Game ${gi + 2}…`}</p>
+      ${myPlan ? `<p class="scout-lean">${styleIcon(myPlan)}<span>You're going with <b>${STYLES[myPlan].name}</b>.</span></p>` : ""}
+      ${pre ? timerHtml() : ""}
       ${mine ? `<div class="wait-lineup">${lineupMini(mine)}</div>` : ""}
       <button class="btn ghost" onclick="leave()">Leave</button>
     </div></section>`;
@@ -695,9 +771,10 @@ function duelAct(p, m) {
   if (m.t === "pick") ok = seriesPick(S, p, m.i | 0);
   else if (m.t === "reroll") ok = seriesReroll(S, p);
   else if (m.t === "roles") ok = seriesRoles(S, p, m.roles);
+  else if (m.t === "style") ok = seriesStyle(S, p, m.style);
   else if (m.t === "next") ok = seriesReady(S, p);
   if (ok) publish();
-  else if (p === App.me && App.draft) { App.draft.locked = false; }
+  else if (p === App.me) { if (App.draft) App.draft.locked = false; if (App.plan) App.plan.locked = false; }
 }
 function publish() {
   const S = App.S;
@@ -717,7 +794,8 @@ function armTimer() {
   clearTimeout(App.timers.turn);
   S.deadline = 0;
   if (!S.timer) return;
-  const ms = S.phase === "draft" ? S.timer * 1000 : S.phase === "roles" ? Math.max(60, S.timer * 2) * 1000 : 0;
+  const ms = S.phase === "draft" ? S.timer * 1000 : S.phase === "roles" ? Math.max(60, S.timer * 2) * 1000
+    : S.phase === "plan" ? Math.max(30, S.timer) * 1000 : 0;
   if (!ms) return;
   S.deadline = Date.now() + ms;
   App.timers.turn = setTimeout(onTurnTimeout, ms + 250);
@@ -729,11 +807,21 @@ function onTurnTimeout() {
   if (S.phase === "draft") {
     const p = pickerOf(G);
     seriesPick(S, p, botChoosePick(G, p, "normal"));
-    if (p === App.me) toast("Time's up! A champion was picked for you.");
+    tellPlayer(p, "Time's up! A champion was picked for you.");
   } else if (S.phase === "roles") {
     [0, 1].forEach(p => { if (!G.roles[p]) seriesRoles(S, p, bestRoles(G.picks[p])); });
+  } else if (S.phase === "plan") {
+    [0, 1].forEach(p => {
+      if (G.styles[p]) return;
+      seriesStyle(S, p, bestStyle(G.roles[p]));
+      tellPlayer(p, "Time's up! You'll play your best-fit game plan.");
+    });
   } else return;
   publish();
+}
+function tellPlayer(p, msg) {
+  if (p === App.me) toast(msg);
+  else if (App.mode === "host" && App.guest) App.net.send(App.guest.id, { t: "toast", msg });
 }
 function scheduleBot() {
   const S = App.S;
@@ -748,6 +836,10 @@ function scheduleBot() {
   } else if (S.phase === "roles" && !G.roles[1]) {
     App.timers.bot = setTimeout(() => {
       if (App.S === S && S.phase === "roles" && !G.roles[1]) { seriesRoles(S, 1, botRoles(G, 1, S.diff)); publish(); }
+    }, 1500);
+  } else if (S.phase === "plan" && !G.styles[1]) {
+    App.timers.bot = setTimeout(() => {
+      if (App.S === S && S.phase === "plan" && !G.styles[1]) { seriesStyle(S, 1, botStyle(G.roles[1], bestRoles(G.picks[0]), S.diff)); publish(); }
     }, 1500);
   } else if (S.phase === "result" && S.winner == null) S.ready[1] = true;
 }
@@ -841,6 +933,7 @@ function guestHandle(m) {
   if (m.t === "lobby") { App.lobby = m; if (App.view === "lobby") render(); }
   else if (m.t === "series" && m.s) { App.series = m.s; App.deadline = m.left ? Date.now() + m.left : 0; syncDuelView(); }
   else if (m.t === "reset") { Object.assign(App, { series: null, seriesId: null }); go("lobby"); toast("The host went back to the lobby"); }
+  else if (m.t === "toast" && typeof m.msg === "string") toast(m.msg);
   else if (m.t === "error") { toast(m.msg); leave(); }
 }
 function copyInvite() {
@@ -868,7 +961,8 @@ function vLobby() {
         <li>You take turns picking: Blue gets picks 1, 4, 5, 8 and 9, Red gets 2, 3, 6, 7 and 10.</li>
         <li>No champion is offered twice in a game, and only the picker sees their options.</li>
         <li>Sides swap for Game 2. The loser of Game 2 gets Blue side (first pick) in Game 3.</li>
-        <li>Lane counters, comp counters and team composition all feed the AI analyst's verdict.</li>
+        <li>After lanes, each player secretly picks a game plan: Dive, Front to Back, Poke, Split Push or Pick.</li>
+        <li>Lane counters, team comps and whose game plan works all feed the AI analyst's verdict.</li>
       </ul>
       <div class="btn-row center">
         ${host ? `<button class="btn primary big" ${L.guest ? "" : "disabled"} onclick="hostStartSeries()">Start series</button>`

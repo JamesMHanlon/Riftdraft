@@ -12,6 +12,20 @@ A League of Legends drafting game. You're shown three champions, keep one, and r
   - Sides swap for Game 2. The loser of Game 2 gets Blue side (first pick) in Game 3.
   - There's an optional pick timer. If it runs out, a champion is picked for you.
 
+## Game plans
+
+After lanes are set, and before every game, you choose how your team will play:
+
+| Plan | Beats | Weak to |
+|---|---|---|
+| Dive | Poke & Siege, Split Push | Front to Back, Pick |
+| Front to Back | Dive, Pick | Poke & Siege, Split Push |
+| Poke & Siege | Front to Back, Pick | Dive, Split Push |
+| Split Push | Front to Back, Poke & Siege | Dive, Pick |
+| Pick | Split Push, Dive | Front to Back, Poke & Siege |
+
+Each champion fits some plans better than others (`STYLE_CHAMPS` in `data.js`), which gives your team a fit percentage for each plan. A high-fit plan is executed better, and countering the enemy's plan gives a bonus that also scales with how well you fit it. A scouting report shows which plan the enemy's champions lean towards. In duels both players choose in secret.
+
 ## How games are decided
 
 `engine.js` simulates early, mid and late game. It weighs:
@@ -19,6 +33,7 @@ A League of Legends drafting game. You're shown three champions, keep one, and r
 - each champion's early-game, late-game and teamfight ratings
 - whether the champion is on its natural role (off-role is −28%)
 - damage mix (AD/AP), frontline and crowd control
+- each team's game plan: how well its champions fit it, and whether it counters the other team's plan
 - **counter matchups**:
   - hard counters from the `COUNTERS` list in `data.js` (e.g. Teemo vs Darius, Malphite vs Yasuo)
   - class matchups (assassin vs mage, tank vs assassin, fighter vs tank…)

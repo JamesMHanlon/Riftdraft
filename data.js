@@ -171,3 +171,36 @@ const MAP_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true">
   <circle cx="90" cy="10" r="7" fill="#ff5a66" fill-opacity=".45" stroke="#ff5a66"/>
 </svg>`;
 const MAP_POS = { Top: [14, 16], Jungle: [31, 43], Mid: [50, 50], ADC: [79, 89], Support: [90, 77] };
+
+// ---------- Game plans ----------
+// Each plan beats two others and loses to two (Dive > Poke, Split · Front to Back > Dive, Pick ·
+// Poke > Front to Back, Pick · Split Push > Front to Back, Poke · Pick > Split Push, Dive).
+const STYLES = {
+  dive: { name: "Dive", desc: "Engage tanks and assassins collapse on the enemy carries the moment a fight starts.", beats: ["poke", "split"] },
+  ftb: { name: "Front to Back", desc: "Tanks hold the line while a protected carry does the damage from behind.", beats: ["dive", "pick"] },
+  poke: { name: "Poke & Siege", desc: "Chip the enemy down from range, then take towers and objectives without a fair fight.", beats: ["ftb", "pick"] },
+  split: { name: "Split Push", desc: "A strong side-laner pressures one lane while the rest of the team stalls.", beats: ["ftb", "poke"] },
+  pick: { name: "Pick", desc: "Hunt isolated targets in the fog with hooks, roots and burst, then force a 5v4.", beats: ["split", "dive"] },
+};
+const STYLE_ORDER = ["dive", "ftb", "poke", "split", "pick"];
+// Champions that are a perfect fit for each plan. Everyone else gets partial credit from their class.
+const STYLE_CHAMPS = {
+  dive: ["Camille","Vi","JarvanIV","XinZhao","Hecarim","Diana","Akali","Zed","Khazix","LeeSin","MonkeyKing","Rell","Leona","Nautilus","Alistar",
+    "Rakan","Kaisa","Katarina","Ekko","Elise","Malphite","Sejuani","Pyke","Yone","Yasuo","Viego","Sylas","Renekton","Amumu","Lillia","Galio","Leblanc","Kassadin"],
+  ftb: ["Ornn","Sion","KSante","Chogath","Shen","Braum","Janna","Lulu","Soraka","Nami","Jinx","Aphelios","Zeri","Vayne","Orianna","Sejuani","Amumu",
+    "Tristana","Xayah","Kindred","MasterYi","Poppy","Senna","Karma","Thresh","Galio","Rumble"],
+  poke: ["Ezreal","Jhin","Varus","Caitlyn","Karma","Zyra","Syndra","Viktor","Azir","Vex","Taliyah","Nidalee","Teemo","Senna","Morgana","Ashe","MissFortune","Rumble"],
+  split: ["Fiora","Jax","Camille","Gwen","Yone","Yasuo","Mordekaiser","Teemo","Tristana","Shen","TwistedFate","Darius","Garen","Aatrox","Renekton",
+    "Vayne","Sion","Kassadin","Akali","Sylas","Ekko","Poppy","Lucian","MasterYi"],
+  pick: ["Thresh","Blitzcrank","Pyke","Morgana","Ahri","Ashe","Elise","Nidalee","TwistedFate","Bard","Leblanc","Leona","Nautilus","Zed","Vex","Syndra",
+    "Taliyah","Rakan","Rell","Lillia","Khazix","Jhin","Caitlyn","Varus"],
+};
+const STYLE_CLASS = { dive: { A: 0.5, F: 0.5, T: 0.35 }, ftb: { T: 0.55, K: 0.5, E: 0.6 }, poke: { M: 0.45, K: 0.35 }, split: { F: 0.45, A: 0.3 }, pick: { T: 0.3, M: 0.3, E: 0.25, A: 0.3 } };
+const STYLE_SVG = {
+  dive: '<path d="M13.5 2L4 13.5h6.5L9 22l10-12.5h-6.5z" fill="currentColor"/>',
+  ftb: '<path d="M12 2l8 3v6c0 5-3.4 9.2-8 11-4.6-1.8-8-6-8-11V5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 6v12M7.5 10.5h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  poke: '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.2"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></g>',
+  split: '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-8.5L5 6.5M12 13.5l7-7"/><path d="M5 11V6.5h4.5M19 11V6.5h-4.5"/></g>',
+  pick: '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2.5v10a5.5 5.5 0 0 1-11 0V11"/><path d="M4 11l-2.2 2.4M4 11l2.4 2.2"/><circle cx="15" cy="2.5" r=".6" fill="currentColor"/></g>',
+};
+const styleIcon = s => `<svg viewBox="0 0 24 24" aria-hidden="true">${STYLE_SVG[s] || ""}</svg>`;
