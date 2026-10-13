@@ -47,17 +47,17 @@ function validRoles(picks, roles) {
   return new Set(Object.values(out)).size === 5 ? out : null;
 }
 
-// Three options; at least one fills a role the team still needs.
+// Four options; at least one fills a role the team still needs.
 function makeOptions(pool, picks) {
   const need = neededRoles(picks);
   const fit = shuffle(pool.filter(c => c.roles.some(r => need.includes(r))));
   const first = fit[0] || rand(pool);
-  return shuffle([first, ...shuffle(pool.filter(c => c !== first)).slice(0, 2)]).map(c => c.id);
+  return shuffle([first, ...shuffle(pool.filter(c => c !== first)).slice(0, 3)]).map(c => c.id);
 }
 function rollOptions(picks, exclude = []) {
   const bad = new Set([...picks, ...exclude]);
   let pool = CHAMPS.filter(c => !bad.has(c.id));
-  if (pool.length < 3) pool = CHAMPS.filter(c => !picks.includes(c.id));
+  if (pool.length < 4) pool = CHAMPS.filter(c => !picks.includes(c.id));
   return makeOptions(pool, picks);
 }
 

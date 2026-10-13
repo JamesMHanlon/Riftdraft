@@ -16,7 +16,7 @@ const DIFF_NOTE = {
   hard: "Bots draft for team comp, hunt counter-picks and rarely misplay.",
 };
 
-const IMG_VER = "14.24.1";
+const IMG_VER = "16.20.1";
 const iconUrl = id => `https://ddragon.leagueoflegends.com/cdn/${IMG_VER}/img/champion/${encodeURIComponent(id)}.png`;
 const artUrl = id => `https://ddragon.leagueoflegends.com/cdn/img/champion/loading/${encodeURIComponent(id)}_0.jpg`;
 const splashUrl = id => `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${encodeURIComponent(id)}_0.jpg`;
@@ -98,7 +98,7 @@ function vHome() {
     <header class="hero">
       <div class="kicker"><span></span>A League of Legends draft game<span></span></div>
       <h1 class="logo">RIFT<em>DRAFT</em></h1>
-      <p class="tagline">Three champions appear. You keep one. Do it five times, set your lanes, and let the AI analyst decide who rules the Rift.</p>
+      <p class="tagline">Four champions appear. You keep one. Do it five times, set your lanes, and let the AI analyst decide who rules the Rift.</p>
       <label class="field name-field"><span>Summoner name</span>
         <input id="nm" maxlength="20" autocomplete="off" placeholder="Enter your name" value="${esc(App.name)}" oninput="setName(this.value)"></label>
     </header>
@@ -131,7 +131,7 @@ function vHome() {
       </div>
     </div>
     <div class="steps">
-      <div class="step"><b>01</b><h4>Draft</h4><p>Pick one of three random champions, five times. In duels you take turns and no champion is ever offered twice.</p></div>
+      <div class="step"><b>01</b><h4>Draft</h4><p>Pick one of four random champions, five times. In duels you take turns and no champion is ever offered twice.</p></div>
       <div class="step"><b>02</b><h4>Lanes &amp; game plan</h4><p>Click role icons to set lanes, then choose how your team plays: dive, front to back, poke, split push or pick.</p></div>
       <div class="step"><b>03</b><h4>Battle</h4><p>The AI analyst plays out every game from first blood to the Nexus, weighing comps, counters and whose game plan works.</p></div>
     </div>
@@ -168,7 +168,7 @@ function champCard(id, i, myPicks, enemyPicks) {
       <h3>${esc(c.name)}</h3>
       <div class="ccard-meta"><span class="dmg ${c.dmg}">${c.dmg}</span><span class="tagx">${CLASS_NAME[c.cls]}</span><span class="tagx">${c.range === "r" ? "Ranged" : "Melee"}</span></div>
       ${beats.length || fears.length ? `<div class="ctags">${beats.map(e => `<span class="ctag good">Counters ${esc(CH[e].name)}</span>`).join("")}${fears.map(e => `<span class="ctag bad">Countered by ${esc(CH[e].name)}</span>`).join("")}</div>` : ""}
-      <div class="stats">${stat("Early", c.early)}${stat("Late", c.late)}${stat("Teamfight", c.tf)}${stat("Frontline", c.front)}${stat("Crowd control", c.cc)}</div>
+      <div class="stats">${stat("Early", c.early)}${stat("Late", c.late)}${stat("Teamfight", c.tf)}${stat("Frontline", c.front)}${stat("CC", c.cc)}</div>
     </div></button>`;
 }
 function startSolo() {
@@ -216,7 +216,7 @@ function reroll() {
   render();
 }
 document.addEventListener("keydown", e => {
-  if (e.target.tagName === "INPUT" || !["1", "2", "3"].includes(e.key)) return;
+  if (e.target.tagName === "INPUT" || !["1", "2", "3", "4"].includes(e.key)) return;
   if (document.querySelector(".ccard") && !App.picking) pickChamp(+e.key - 1);
 });
 

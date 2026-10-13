@@ -1,6 +1,6 @@
 # Rift Draft
 
-A League of Legends drafting game. You're shown three champions, keep one, and repeat until you have five. Then you click role icons to set your lanes, and an AI analyst plays out the game.
+A League of Legends drafting game. You're shown four champions, keep one, and repeat until you have five. All 173 champions are in the pool. Then you click role icons to set your lanes, and an AI analyst plays out the game.
 
 ## Modes
 
@@ -8,7 +8,7 @@ A League of Legends drafting game. You're shown three champions, keep one, and r
 - **Practice Duel**: a best-of-3 against a bot, using the same rules as an online duel.
 - **Online Duel**: a 1v1 best-of-3 against a friend.
   - You take turns picking in pro draft order: Blue picks 1, 4, 5, 8, 9 and Red picks 2, 3, 6, 7, 10.
-  - No champion is offered twice in a game, and only the picker sees their three options.
+  - No champion is offered twice in a game, and only the picker sees their four options.
   - Sides swap for Game 2. The loser of Game 2 gets Blue side (first pick) in Game 3.
   - There's an optional pick timer. If it runs out, a champion is picked for you.
 
